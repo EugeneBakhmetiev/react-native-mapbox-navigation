@@ -128,4 +128,9 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     onArrive?(["message": ""]);
     return true;
   }
+
+  @objc
+  func triggerReroute() {
+    embed();
+  }
 }

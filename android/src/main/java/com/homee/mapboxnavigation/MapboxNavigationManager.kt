@@ -75,4 +75,12 @@ class MapboxNavigationManager(var mCallerContext: ReactApplicationContext) : Sim
     fun setShowsEndOfRouteFeedback(view: MapboxNavigationView, showsEndOfRouteFeedback: Boolean) {
         view.setShowsEndOfRouteFeedback(showsEndOfRouteFeedback)
     }
+
+    override fun receiveCommand(view: MapboxNavigationView, commandId: String, args: ReadableArray?) {
+        when (commandId) {
+            "triggerRerouteFromManager" -> {
+                view.triggerReroute();
+            }
+        }
+    }
 }
