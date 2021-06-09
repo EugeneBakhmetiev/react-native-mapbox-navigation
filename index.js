@@ -3,7 +3,7 @@ import * as React from 'react';
 import { requireNativeComponent, StyleSheet, View } from 'react-native';
 
 const MapboxNavigation = (props) => {
-  return <RNMapboxNavigation style={styles.flex} {...props} />;
+  return <RNMapboxNavigation style={styles.flex} ref={props.innerRef} {...props} />;
 };
 
 MapboxNavigation.propTypes = {
@@ -16,6 +16,7 @@ MapboxNavigation.propTypes = {
   onCancelNavigation: PropTypes.func,
   onArrive: PropTypes.func,
   showsEndOfRouteFeedback: PropTypes.bool,
+  innerRef: PropTypes.ref.isRequired,
 };
 
 const RNMapboxNavigation = requireNativeComponent(

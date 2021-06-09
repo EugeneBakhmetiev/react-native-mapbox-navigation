@@ -218,6 +218,33 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
         this.showsEndOfRouteFeedback = showsEndOfRouteFeedback
     }
 
+    fun triggerReroute() {
+        try {
+            val accessToken = Mapbox.getAccessToken()
+            if (accessToken == null) {
+                sendErrorToReact("Mapbox access token is not set")
+                return
+            }
+
+            if (origin == null || destination == null) {
+                sendErrorToReact("origin and destination are required")
+                return
+            }
+
+            // fetch the route
+            this.mapboxNavigation.requestRoutes(RouteOptions.builder()
+                    .applyDefaultParams()
+                    .accessToken(accessToken)
+                    .coordinates(mutableListOf(origin, destination))
+                    .profile(RouteUrl.PROFILE_DRIVING)
+                    .steps(true)
+                    .voiceInstructions(true)
+                    .build(), routesReqCallback)
+        } catch (ex: Exception) {
+            sendErrorToReact(ex.toString())
+        }
+    }
+
     fun onDropViewInstance() {
         this.onDestroy()
     }
