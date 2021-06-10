@@ -27,8 +27,10 @@ import com.mapbox.navigation.ui.map.NavigationMapboxMap
 class MapboxNavigationView(private val context: ThemedReactContext) : NavigationView(context.baseContext), NavigationListener, OnNavigationReadyCallback {
     private var origin: Point? = null
     private var destination: Point? = null
+    private var waypoints: List<Point?> = []
     private var shouldSimulateRoute = false
     private var showsEndOfRouteFeedback = false
+    private var language = "en"
     private lateinit var navigationMapboxMap: NavigationMapboxMap
     private lateinit var mapboxNavigation: MapboxNavigation
 
@@ -97,6 +99,7 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
                     .coordinates(mutableListOf(origin, destination))
                     .profile(RouteUrl.PROFILE_DRIVING)
                     .steps(true)
+                    .language(this.language)
                     .voiceInstructions(true)
                     .build(), routesReqCallback)
         } catch (ex: Exception) {
@@ -218,6 +221,14 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
         this.showsEndOfRouteFeedback = showsEndOfRouteFeedback
     }
 
+    fun setLanguage(language: String) {
+        this.language = language
+    }
+
+    fun setWaypoints(waypoints: List<Point?>) {
+        this.waypoints = waypoints
+    }
+
     fun triggerReroute() {
         try {
             val accessToken = Mapbox.getAccessToken()
@@ -238,6 +249,7 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
                     .coordinates(mutableListOf(origin, destination))
                     .profile(RouteUrl.PROFILE_DRIVING)
                     .steps(true)
+                    .language(this.language)
                     .voiceInstructions(true)
                     .build(), routesReqCallback)
         } catch (ex: Exception) {

@@ -76,6 +76,22 @@ class MapboxNavigationManager(var mCallerContext: ReactApplicationContext) : Sim
         view.setShowsEndOfRouteFeedback(showsEndOfRouteFeedback)
     }
 
+    @ReactProp(name = "language")
+    fun setLanguage(view: MapboxNavigationView, language: String) {
+        view.setLanguage(language)
+    }
+
+    @ReactProp(name = "waypoints")
+    fun setWaypoints(view: MapboxNavigationView, sources: ReadableArray?) {
+        val waypoints: MutableList<Point> = []
+
+        for (point in sources) {
+            waypoints.add(Point.fromLngLat(point.getDouble(0), point.getDouble(1)))
+        }
+
+        view.setWaypoints(waypoints)
+    }
+
     override fun receiveCommand(view: MapboxNavigationView, commandId: String, args: ReadableArray?) {
         when (commandId) {
             "triggerRerouteFromManager" -> {

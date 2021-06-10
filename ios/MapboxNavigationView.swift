@@ -89,7 +89,9 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
           
           let navigationService = MapboxNavigationService(route: route, routeIndex: 0, routeOptions: options, simulating: strongSelf.shouldSimulateRoute ? .always : .never)
           
-          let navigationOptions = NavigationOptions(navigationService: navigationService)
+          let bottomBannerView = CustomBottomBarViewController()
+
+          let navigationOptions = NavigationOptions(navigationService: navigationService, bottomBanner: bottomBannerView)
           let vc = NavigationViewController(for: route, routeIndex: 0, routeOptions: options, navigationOptions: navigationOptions)
 
           vc.showsEndOfRouteFeedback = strongSelf.showsEndOfRouteFeedback
@@ -134,3 +136,5 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     embed();
   }
 }
+
+class InvisibleBottomBarViewController: ContainerViewController {}
