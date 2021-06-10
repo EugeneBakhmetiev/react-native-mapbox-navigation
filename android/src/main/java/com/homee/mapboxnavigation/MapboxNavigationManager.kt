@@ -83,10 +83,21 @@ class MapboxNavigationManager(var mCallerContext: ReactApplicationContext) : Sim
 
     @ReactProp(name = "waypoints")
     fun setWaypoints(view: MapboxNavigationView, sources: ReadableArray?) {
-        val waypoints: MutableList<Point> = []
+        if (sources == null) {
+            view.setWaypoints(listOf())
+            return
+        }
 
-        for (point in sources) {
+        val waypoints: MutableList<Point> = mutableListOf()
+
+        var index = 0
+        val size = sources.size()
+
+        while (index < size) {
+            val point = sources.getArray(index)
+
             waypoints.add(Point.fromLngLat(point.getDouble(0), point.getDouble(1)))
+            index++
         }
 
         view.setWaypoints(waypoints)
