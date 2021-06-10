@@ -96,7 +96,7 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
             this.mapboxNavigation.requestRoutes(RouteOptions.builder()
                     .applyDefaultParams()
                     .accessToken(accessToken)
-                    .coordinates(mutableListOf(origin, destination))
+                    .coordinates(mutableListOf(origin) + this.waypoints + listOf(destination))
                     .profile(RouteUrl.PROFILE_DRIVING)
                     .steps(true)
                     .language(this.language)
