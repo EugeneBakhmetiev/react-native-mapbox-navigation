@@ -27,7 +27,7 @@ import com.mapbox.navigation.ui.map.NavigationMapboxMap
 class MapboxNavigationView(private val context: ThemedReactContext) : NavigationView(context.baseContext), NavigationListener, OnNavigationReadyCallback {
     private var origin: Point? = null
     private var destination: Point? = null
-    private var waypoints: List<Point?> = []
+    private var waypoints: List<Point?> = listOf()
     private var shouldSimulateRoute = false
     private var showsEndOfRouteFeedback = false
     private var language = "en"
@@ -246,7 +246,7 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
             this.mapboxNavigation.requestRoutes(RouteOptions.builder()
                     .applyDefaultParams()
                     .accessToken(accessToken)
-                    .coordinates(mutableListOf(origin, destination))
+                    .coordinates(mutableListOf(origin) + this.waypoints + listOf(destination))
                     .profile(RouteUrl.PROFILE_DRIVING)
                     .steps(true)
                     .language(this.language)
