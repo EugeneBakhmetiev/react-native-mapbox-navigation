@@ -101,109 +101,63 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     embedding = true
 
     let originWaypoint = Waypoint(coordinate: CLLocationCoordinate2D(latitude: origin[1] as! CLLocationDegrees, longitude: origin[0] as! CLLocationDegrees))
-    let destinationWaypoint = Waypoint(coordinate: CLLocationCoordinate2D(latitude: destination[1] as! CLLocationDegrees, longitude: destination[0] as! CLLocationDegrees))
+    var lastWaypointIndex = 23
+    // if there's 23 or more waypoints in-between origin and destination, then there are at least 2 chunks we'll have to draw
+    if waypoints.count < 24 {
+        // need to add all waypoints + destination
+        lastWaypointIndex = waypoints.count - 1
+    }
 
     var intermediateWaypoints: [Waypoint] = [originWaypoint]
+    
+    for index in 0...lastWaypointIndex {
+        let point = waypoints[index] as! NSArray
+        
+        intermediateWaypoints.append(Waypoint(coordinate: CLLocationCoordinate2D(latitude: point[1] as! CLLocationDegrees, longitude: point[0] as! CLLocationDegrees)))
+    }
 
-    waypoints.compactMap { $0 as? NSArray }
-        .forEach { point in
-            intermediateWaypoints.append(Waypoint(coordinate: CLLocationCoordinate2D(latitude: point[1] as! CLLocationDegrees, longitude: point[0] as! CLLocationDegrees)))
-        }
-    
-    intermediateWaypoints.append(destinationWaypoint)
-    
+    if waypoints.count < 24 {
+        intermediateWaypoints.append(Waypoint(coordinate: CLLocationCoordinate2D(latitude: destination[1] as! CLLocationDegrees, longitude: destination[0] as! CLLocationDegrees)))
+    }
+
     let options = NavigationRouteOptions(waypoints: intermediateWaypoints)
     
     Directions.shared.calculate(options) { [weak self] (session, result) in
-      guard let strongSelf = self, let parentVC = strongSelf.parentViewController else {
-        return
-      }
-      
-      switch result {
-        case .failure(let error):
-          strongSelf.onError!(["message": error.localizedDescription])
-        case .success(let response):
-          guard let route = response.routes?.first else {
+        guard let strongSelf = self, let parentVC = strongSelf.parentViewController else {
             return
-          }
-          
-          let navigationService = MapboxNavigationService(route: route, routeIndex: 0, routeOptions: options, simulating: strongSelf.shouldSimulateRoute ? .always : .never)
-          
-//          let bottomBannerView = InvisibleBottomBarViewController()
+        }
 
-//          let navigationOptions = NavigationOptions(navigationService: navigationService, bottomBanner: bottomBannerView)
-            
-//          let style = DefaultStyle()
-//            let style = MGLStyle()
-//
-//            let point = MGLPointAnnotation()
-//            point.coordinate = CLLocationCoordinate2D(latitude: destinationWaypoint.coordinate.latitude, longitude: destinationWaypoint.coordinate.longitude)
-//
-//            // Create a data source to hold the point data
-//            let shapeSource = MGLShapeSource(identifier: "marker-source", shape: point, options: nil)
-//
-//            // Create a style layer for the symbol
-//            let shapeLayer = MGLSymbolStyleLayer(identifier: "marker-style", source: shapeSource)
-//
-//            // Add the image to the style's sprite
-//            if let image = UIImage(named: "ContainerIcon") {
-//                style.setImage(image, forName: "ContainerSymbol")
-//            }
-//
-//            // Tell the layer to use the image in the sprite
-//            shapeLayer.iconImageName = NSExpression(forConstantValue: "ContainerSymbol")
-//
-//            // Add the source and style layer to the map
-//            style.addSource(shapeSource)
-//            style.addLayer(shapeLayer)
+        switch result {
+            case .failure(let error):
+                strongSelf.onError!(["message": error.localizedDescription])
+            case .success(let response):
+                guard let route = response.routes?.first else {
+                    return
+                }
 
-//            let navigationOptions = NavigationOptions(styles: [style], navigationService: navigationService)
+            let navigationService = MapboxNavigationService(route: route, routeIndex: 0, routeOptions: options, simulating: strongSelf.shouldSimulateRoute ? .always : .never)
+          
+    //          let bottomBannerView = InvisibleBottomBarViewController()
+    //          let navigationOptions = NavigationOptions(navigationService: navigationService, bottomBanner: bottomBannerView)
+
             let navigationOptions = NavigationOptions(navigationService: navigationService)
             
             let vc = NavigationViewController(for: route, routeIndex: 0, routeOptions: options, navigationOptions: navigationOptions)
 
-          vc.showsEndOfRouteFeedback = strongSelf.showsEndOfRouteFeedback
-          
-          vc.delegate = strongSelf
-        
-          parentVC.addChild(vc)
-          strongSelf.addSubview(vc.view)
-          vc.view.frame = strongSelf.bounds
-          vc.didMove(toParent: parentVC)
-          strongSelf.navViewController = vc
-                      
-//            vc.mapView?.styleURL = MGLStyle.lightStyleURL
+            vc.showsEndOfRouteFeedback = strongSelf.showsEndOfRouteFeedback
 
-            print("---- before style ----")
-            if let style = vc.mapView?.style {
-                print("---- style is present ----", style)
-                // Create point to represent where the symbol should be placed
-                let point = MGLPointAnnotation()
-                point.coordinate = CLLocationCoordinate2D(latitude: destinationWaypoint.coordinate.latitude, longitude: destinationWaypoint.coordinate.longitude)
-                 
-                // Create a data source to hold the point data
-                let shapeSource = MGLShapeSource(identifier: "marker-source", shape: point, options: nil)
-                 
-                // Create a style layer for the symbol
-                let shapeLayer = MGLSymbolStyleLayer(identifier: "marker-style", source: shapeSource)
-                 
-                // Add the image to the style's sprite
-                if let image = UIImage(named: "ContainerIcon") {
-                    style.setImage(image, forName: "ContainerSymbol")
-                }
-                 
-                // Tell the layer to use the image in the sprite
-                shapeLayer.iconImageName = NSExpression(forConstantValue: "ContainerSymbol")
-                 
-                // Add the source and style layer to the map
-                style.addSource(shapeSource)
-                style.addLayer(shapeLayer)
-            }
+            vc.delegate = strongSelf
 
-      }
+            strongSelf.navViewController?.removeFromParent()
+            parentVC.addChild(vc)
+            strongSelf.addSubview(vc.view)
+            vc.view.frame = strongSelf.bounds
+            vc.didMove(toParent: parentVC)
+            strongSelf.navViewController = vc
+        }
       
-      strongSelf.embedding = false
-      strongSelf.embedded = true
+        strongSelf.embedding = false
+        strongSelf.embedded = true
     }
   }
   
@@ -237,13 +191,128 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
 
 //    func navigationViewController(_ navigationViewController: NavigationViewController, waypointSymbolStyleLayerWithIdentifier identifier: String, source: MGLSource) -> MGLStyleLayer? {
     func navigationViewController(_ navigationViewController: NavigationViewController, waypointStyleLayerWithIdentifier identifier: String, source: MGLSource) -> MGLStyleLayer? {
-        if let style = self.navViewController?.mapView?.style {
+        drawRoutes()
+        drawIcons()
+    
+        let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(sender:)))
+//            for recognizer in navViewController?.mapView?.gestureRecognizers ?? [] where recognizer is UITapGestureRecognizer {
+//                singleTap.require(toFail: recognizer)
+//            }
+        navViewController?.mapView?.addGestureRecognizer(singleTap)
+        
+        let styleLayer = MGLSymbolStyleLayer(identifier: identifier, source: source)
+        return styleLayer
+    }
+    
+    func drawRoutes() {
+        guard let style = navViewController?.mapView?.style else {
+            return
+        }
 
-            
-//            var activeContainerFeatures: [Any] = []
-//            var completedContainerFeatures: [Any] = []
-//            var skippedContainerFeatures: [Any] = []
-            
+        // step 1 -- check waypoints length
+        if waypoints.count < 24 {
+            return
+        }
+
+        // step 2 -- if > 23, then at least one chunk to draw. Start cycling through from index 23 (it will be the last in previous chunk)
+        var routeChunks: [[Waypoint]] = [[]]
+        var chunkIndex = 0
+        var pointIndex = 1
+
+        for index in 23...waypoints.count - 1 {
+            let point = waypoints[index] as! NSArray
+            let newWaypoint = Waypoint(coordinate: CLLocationCoordinate2D(latitude: point[1] as! CLLocationDegrees, longitude: point[0] as! CLLocationDegrees))
+            routeChunks[chunkIndex].append(newWaypoint)
+
+            if pointIndex == 24 {
+                pointIndex = 0
+                chunkIndex += 1
+
+                // add end point of previous chunk as a start point of next chunk
+                routeChunks.append([newWaypoint])
+            } else {
+                pointIndex += 1
+            }
+        }
+
+        let destinationWaypoint = Waypoint(coordinate: CLLocationCoordinate2D(latitude: destination[1] as! CLLocationDegrees, longitude: destination[0] as! CLLocationDegrees))
+        routeChunks[chunkIndex].append(destinationWaypoint)
+
+        // step 3 -- request routes for each chunk, make shapes out of 'em; same routine as with icons -- check if source is present, update shape if it is, create new one if it isn't
+        for (sourceIndex, chunk) in routeChunks.enumerated() {
+            let options = NavigationRouteOptions(waypoints: chunk)
+            let stringIndex = String(sourceIndex)
+
+            Directions.shared.calculate(options) { [weak self] (session, result) in
+                guard let strongSelf = self else {
+                    return
+                }
+
+                switch result {
+                    case .failure(let error):
+                        strongSelf.onError!(["message": error.localizedDescription])
+                    case .success(let response):
+                        guard let route = response.routes?.first else {
+                            return
+                        }
+
+                        guard let routeShape = route.shape else {
+                            return
+                        }
+
+                        let sourceIdentifier = "routeChunkSource" + stringIndex
+
+                        let polyline = MGLPolyline(routeShape)
+                        
+                        if let chunkSource = style.source(withIdentifier: sourceIdentifier) as? MGLShapeSource {
+                            chunkSource.shape = polyline
+                        } else {
+                            let chunkSource = MGLShapeSource(identifier: sourceIdentifier, shape: polyline, options: nil)
+                            let polylineLayer = MGLLineStyleLayer(identifier: "routeChunkLayer" + String(sourceIndex), source: chunkSource)
+
+                            // Set the line join and cap to a rounded end.
+                            polylineLayer.lineJoin = NSExpression(forConstantValue: "round")
+                            polylineLayer.lineCap = NSExpression(forConstantValue: "round")
+                             
+                            // Set the line color to a constant blue color.
+                            polylineLayer.lineColor = NSExpression(forConstantValue: UIColor(red: 88/255, green: 168/255, blue: 252/255, alpha: 1))
+                             
+                            // Use `NSExpression` to smoothly adjust the line width from 2pt to 20pt between zoom levels 14 and 18. The `interpolationBase` parameter allows the values to interpolate along an exponential curve.
+                            polylineLayer.lineWidth = NSExpression(format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'linear', nil, %@)",
+                                                                   [14: 8, 18: 20])
+    //                        polylineLayer.lineWidth = NSExpression(forConstantValue: 20)
+
+                            // We can also add a second layer that will draw a stroke around the original line.
+                            let casingLayer = MGLLineStyleLayer(identifier: "routeChunkCaseLayer" + String(sourceIndex), source: chunkSource)
+                            // Copy these attributes from the main line layer.
+                            casingLayer.lineJoin = polylineLayer.lineJoin
+                            casingLayer.lineCap = polylineLayer.lineCap
+                            // Line gap width represents the space before the outline begins, so should match the main line’s line width exactly.
+                            casingLayer.lineGapWidth = polylineLayer.lineWidth
+                            // Stroke color slightly darker than the line color.
+                            casingLayer.lineColor = NSExpression(forConstantValue: UIColor(red: 44/255, green: 129/255, blue: 199/255, alpha: 1))
+                            // Use `NSExpression` to gradually increase the stroke width between zoom levels 14 and 18.
+                            casingLayer.lineWidth = NSExpression(format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'linear', nil, %@)", [14: 2, 18: 4])
+    //                        casingLayer.lineWidth = NSExpression(forConstantValue: 4)
+
+                            style.addSource(chunkSource)
+    //                        style.addLayer(polylineLayer)
+                            
+                            if let activeFeaturesLayer = style.layer(withIdentifier: "activeContainersLayer") {
+                                style.insertLayer(polylineLayer, below: activeFeaturesLayer)
+                            } else {
+                                style.addLayer(polylineLayer)
+                            }
+                            style.insertLayer(casingLayer, below: polylineLayer)
+                        }
+                    }
+            }
+        }
+    }
+    
+    func drawIcons() {
+        // @todo check if we need to remove layers/sources and add new ones so that icons are updated when waypoint status changes
+        if let style = self.navViewController?.mapView?.style {
             var activeFeatures: [MGLPointFeature] = []
             var skippedFeatures: [MGLPointFeature] = []
             var completedFeatures: [MGLPointFeature] = []
@@ -266,25 +335,19 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                         "id": pickupOrderId
                     ]
 
-                    print("---- point info ----", pointType, pointStatus)
-                    
                     if pointType == "container" {
                         switch pointStatus {
                             // maybe keep all geoJsons in a single dict, and use status/type combo as a key?
                             case "completed":
-                                print("---- container completed ----")
                                 completedFeatures.append(newFeature)
 
                             case "connected_to_route":
-                                print("---- container active ----")
                                 activeFeatures.append(newFeature)
 
                             case "skipped":
-                                print("---- container skipped ----")
                                 skippedFeatures.append(newFeature)
 
                             default:
-                                print("---- container default ----")
                                 skippedFeatures.append(newFeature)
 
                         }
@@ -310,25 +373,20 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
 //                            "status": pointStatus,
                 "id": pickupOrderId
             ]
-            print("---- dest ----", pointType, pointStatus)
             
             if pointType == "container" {
                 switch pointStatus {
                     // maybe keep all geoJsons in a single dict, and use status/type combo as a key?
                     case "completed":
-                        print("---- container completed ----")
                         completedFeatures.append(newFeature)
 
                     case "connected_to_route":
-                        print("---- container active ----")
                         activeFeatures.append(newFeature)
 
                     case "skipped":
-                        print("---- container skipped ----")
                         skippedFeatures.append(newFeature)
 
                     default:
-                        print("---- container default ----")
                         skippedFeatures.append(newFeature)
 
                 }
@@ -340,122 +398,119 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                 }
             }
 
-//            activeContainers["features"] = activeContainerFeatures
-//            completedContainers["features"] = completedContainerFeatures
-            
-//            print("---- activeContainers ----", activeContainers)
             if !activeFeatures.isEmpty {
-                print("---- activeFeatures ----", activeFeatures)
-
                 style.setImage(UIImage(named: "ContainerIcon")!, forName: "activeContainer")
-                
-                let iconSource = MGLShapeSource(identifier: "activeContainersSource", features: activeFeatures, options: nil)
-                
-                let symbols = MGLSymbolStyleLayer(identifier: "activeContainersLayer", source: iconSource)
 
-                symbols.iconImageName = NSExpression(forConstantValue: "activeContainer")
+                if let iconSource = style.source(withIdentifier: "activeContainersSource") as? MGLShapeSource {
+                    let collection = MGLShapeCollectionFeature(shapes: activeFeatures)
 
-                style.addSource(iconSource)
-                style.addLayer(symbols)
+                    iconSource.shape = collection
+                } else {
+                    let iconSource = MGLShapeSource(identifier: "activeContainersSource", features: activeFeatures, options: nil)
+
+                    let symbols = MGLSymbolStyleLayer(identifier: "activeContainersLayer", source: iconSource)
+                    symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
+
+                    symbols.iconImageName = NSExpression(forConstantValue: "activeContainer")
+
+                    style.addSource(iconSource)
+//                    style.addLayer(symbols)
+                    
+                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
+                }
             }
 
             if !skippedFeatures.isEmpty {
-                print("---- skippedFeatures ----", skippedFeatures)
-
                 style.setImage(UIImage(named: "SkippedContainerIcon")!, forName: "skippedContainer")
                 
-                let iconSource = MGLShapeSource(identifier: "skippedContainersSource", features: skippedFeatures, options: nil)
-                
-                let symbols = MGLSymbolStyleLayer(identifier: "skippedContainersLayer", source: iconSource)
+                if let iconSource = style.source(withIdentifier: "skippedContainersSource") as? MGLShapeSource {
+                    let collection = MGLShapeCollectionFeature(shapes: skippedFeatures)
 
-                symbols.iconImageName = NSExpression(forConstantValue: "skippedContainer")
+                    iconSource.shape = collection
+                } else {
+                    let iconSource = MGLShapeSource(identifier: "skippedContainersSource", features: skippedFeatures, options: nil)
 
-                style.addSource(iconSource)
-                style.addLayer(symbols)
+                    let symbols = MGLSymbolStyleLayer(identifier: "skippedContainersLayer", source: iconSource)
+
+                    symbols.iconImageName = NSExpression(forConstantValue: "skippedContainer")
+                    symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
+
+                    style.addSource(iconSource)
+//                    style.addLayer(symbols)
+                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
+
+                }
             }
             
             if !completedFeatures.isEmpty {
-                print("---- completedFeatures ----", completedFeatures)
-
                 style.setImage(UIImage(named: "CompletedContainerIcon")!, forName: "completedContainer")
-                
-                let iconSource = MGLShapeSource(identifier: "completedContainersSource", features: completedFeatures, options: nil)
-                
-                let symbols = MGLSymbolStyleLayer(identifier: "completedContainersLayer", source: iconSource)
 
-                symbols.iconImageName = NSExpression(forConstantValue: "completedContainer")
+                if let iconSource = style.source(withIdentifier: "completedContainersSource") as? MGLShapeSource {
+                    let collection = MGLShapeCollectionFeature(shapes: completedFeatures)
 
-                style.addSource(iconSource)
-                style.addLayer(symbols)
+                    iconSource.shape = collection
+                } else {
+                    let iconSource = MGLShapeSource(identifier: "completedContainersSource", features: completedFeatures, options: nil)
+
+                    let symbols = MGLSymbolStyleLayer(identifier: "completedContainersLayer", source: iconSource)
+
+                    symbols.iconImageName = NSExpression(forConstantValue: "completedContainer")
+                    symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
+
+                    style.addSource(iconSource)
+//                    style.addLayer(symbols)
+                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
+
+                }
             }
 
             if !depotFeatures.isEmpty {
-                print("---- depotFeatures ----", depotFeatures)
-
                 style.setImage(UIImage(named: "DepotIcon")!, forName: "depot")
-                
-                let iconSource = MGLShapeSource(identifier: "depotsSource", features: depotFeatures, options: nil)
-                
-                let symbols = MGLSymbolStyleLayer(identifier: "depotsLayer", source: iconSource)
 
-                symbols.iconImageName = NSExpression(forConstantValue: "depot")
+                if let iconSource = style.source(withIdentifier: "depotsSource") as? MGLShapeSource {
+                    let collection = MGLShapeCollectionFeature(shapes: depotFeatures)
 
-                style.addSource(iconSource)
-                style.addLayer(symbols)
+                    iconSource.shape = collection
+                } else {
+                    let iconSource = MGLShapeSource(identifier: "depotsSource", features: depotFeatures, options: nil)
+
+                    let symbols = MGLSymbolStyleLayer(identifier: "depotsLayer", source: iconSource)
+                    symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
+
+                    symbols.iconImageName = NSExpression(forConstantValue: "depot")
+
+                    style.addSource(iconSource)
+                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
+
+                }
             }
 
             if !wasteStationFeatures.isEmpty {
-                print("---- wasteStationFeatures ----", wasteStationFeatures)
-
                 style.setImage(UIImage(named: "WasteStationIcon")!, forName: "wasteStation")
-                
-                let iconSource = MGLShapeSource(identifier: "wasteStationsSource", features: wasteStationFeatures, options: nil)
-                
-                let symbols = MGLSymbolStyleLayer(identifier: "wasteStationsLayer", source: iconSource)
 
-                symbols.iconImageName = NSExpression(forConstantValue: "wasteStation")
+                if let iconSource = style.source(withIdentifier: "wasteStationsSource") as? MGLShapeSource {
+                    let collection = MGLShapeCollectionFeature(shapes: wasteStationFeatures)
 
-                style.addSource(iconSource)
-                style.addLayer(symbols)
+                    iconSource.shape = collection
+                } else {
+                    let iconSource = MGLShapeSource(identifier: "wasteStationsSource", features: wasteStationFeatures, options: nil)
+
+                    let symbols = MGLSymbolStyleLayer(identifier: "wasteStationsLayer", source: iconSource)
+                    symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
+
+                    symbols.iconImageName = NSExpression(forConstantValue: "wasteStation")
+
+                    style.addSource(iconSource)
+//                    style.addLayer(symbols)
+                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
+
+                }
             }
-
-//            print("---- completedContainers ----", completedContainers)
-//            if let completedData = try? JSONSerialization.data(withJSONObject: completedContainers, options: .prettyPrinted) {
-//                print("---- completedData ----", completedData)
-//                style.setImage(UIImage(named: "CompletedContainerIcon")!, forName: "completedContainer")
-//
-//                guard let shapeFromGeoJSON = try? MGLShape(data: completedData, encoding: String.Encoding.utf8.rawValue) else {
-//                    fatalError("Could not generate MGLShape")
-//                }
-//
-//                let iconSource = MGLShapeSource(identifier: "completedContainersSource", shape: shapeFromGeoJSON, options: nil)
-//
-//                let symbols = MGLSymbolStyleLayer(identifier: "completedContainersLayer", source: iconSource)
-//
-//                symbols.iconImageName = NSExpression(forConstantValue: "completedContainer")
-//
-//                style.addSource(iconSource)
-//                style.addLayer(symbols)
-//            }
-            
-            print("---- here ----")
-            let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleMapTap(sender:)))
-            print("---- here 2 ----", #selector(handleMapTap(sender:)))
-//            for recognizer in navViewController?.mapView?.gestureRecognizers ?? [] where recognizer is UITapGestureRecognizer {
-//                singleTap.require(toFail: recognizer)
-//            }
-            print("---- here 3 ----")
-            navViewController?.mapView?.addGestureRecognizer(singleTap)
         }
-        
-        let styleLayer = MGLSymbolStyleLayer(identifier: identifier, source: source)
-
-        return styleLayer
     }
 
     // MARK: - Feature interaction
     @objc @IBAction func handleMapTap(sender: UITapGestureRecognizer) {
-        print("---- TAP ----")
         if sender.state == .ended {
             // Limit feature selection to just the following layer identifiers.
             let layerIdentifiers: Set = ["completedContainersLayer", "skippedContainersLayer", "activeContainersLayer", "wasteStationsLayer", "depotsLayer"]
@@ -480,7 +535,7 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
              
             // Select the closest feature to the touch center.
             let closestFeatures = possibleFeatures.sorted(by: {
-                return CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude).distance(from: touchLocation) < CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude).distance(from: touchLocation)
+            return CLLocation(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude).distance(from: touchLocation) < CLLocation(latitude: $1.coordinate.latitude, longitude: $1.coordinate.longitude).distance(from: touchLocation)
             })
             if let feature = closestFeatures.first {
                 guard let closestFeature = feature as? MGLPointFeature else {
@@ -496,9 +551,11 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     }
      
     func showCallout(feature: MGLPointFeature) {
-        print("---- point tapped ----", feature.attributes["id"] as? String)
         onMarkerTap?(["id": feature.attributes["id"] as? String])
-
+//        let point = MGLPointFeature()
+//        point.title = feature.attributes["name"] as? String
+//        point.coordinate = feature.coordinate
+         
         // Selecting an feature that doesn’t already exist on the map will add a new annotation view.
         // We’ll need to use the map’s delegate methods to add an empty annotation view and remove it when we’re done selecting it.
         // mapView.selectAnnotation(point, animated: true, completionHandler: nil)
@@ -507,6 +564,9 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
   @objc
   func triggerReroute() {
     embed();
+    
+    drawRoutes()
+    drawIcons()
   }
 }
 
