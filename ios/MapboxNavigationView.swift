@@ -17,31 +17,6 @@ extension UIView {
   }
 }
 
-extension MGLMapViewDelegate {
-    func mapView(_ mapView: MGLMapView, didDeselect annotation: MGLAnnotation) {
-        print("---- didSelect ----")
-    }
-    
-    func mapView(_ mapView: MGLMapView, didDeselect waypoint: Waypoint) {
-        print("---- didSelect waypoint ----")
-    }
-
-}
-
-extension NavigationMapViewDelegate {
-    func navigationMapView(_ mapView: NavigationMapView, didDeselect annotation: MGLAnnotation) {
-        print("---- didSelect nm ----")
-    }
-    
-    func navigationMapView(_ mapView: NavigationMapView, didSelect waypoint: Waypoint) {
-        print("---- didSelect waypoint nm ----")
-    }
-
-    func navigationMapView(_ mapView: NavigationMapView, didSelect route: Route) {
-        print("---- didSelect route nm ----")
-    }
-}
-
 class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
   weak var navViewController: NavigationViewController?
   var embedded: Bool
@@ -58,6 +33,8 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
   @objc var waypoints: NSArray = [] {
     didSet { setNeedsLayout() }
   }
+
+  @objc var geojson: NSString = ""
   
   @objc var shouldSimulateRoute: Bool = false
   @objc var showsEndOfRouteFeedback: Bool = false
@@ -68,6 +45,7 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
   @objc var onCancelNavigation: RCTDirectEventBlock?
   @objc var onArrive: RCTDirectEventBlock?
   @objc var onMarkerTap: RCTDirectEventBlock?
+  @objc var onRerouteFinished: RCTDirectEventBlock?
   
   override init(frame: CGRect) {
     self.embedded = false
@@ -101,27 +79,11 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     embedding = true
 
     let originWaypoint = Waypoint(coordinate: CLLocationCoordinate2D(latitude: origin[1] as! CLLocationDegrees, longitude: origin[0] as! CLLocationDegrees))
-    var lastWaypointIndex = 23
-    // if there's 23 or more waypoints in-between origin and destination, then there are at least 2 chunks we'll have to draw
-    if waypoints.count < 24 {
-        // need to add all waypoints + destination
-        lastWaypointIndex = waypoints.count - 1
-    }
+    let destinationWaypoint = Waypoint(coordinate: CLLocationCoordinate2D(latitude: destination[1] as! CLLocationDegrees, longitude: destination[0] as! CLLocationDegrees))
 
-    var intermediateWaypoints: [Waypoint] = [originWaypoint]
-    
-    for index in 0...lastWaypointIndex {
-        let point = waypoints[index] as! NSArray
-        
-        intermediateWaypoints.append(Waypoint(coordinate: CLLocationCoordinate2D(latitude: point[1] as! CLLocationDegrees, longitude: point[0] as! CLLocationDegrees)))
-    }
+    let options = NavigationRouteOptions(waypoints: [originWaypoint, destinationWaypoint, destinationWaypoint])
+    options.allowsUTurnAtWaypoint = true
 
-    if waypoints.count < 24 {
-        intermediateWaypoints.append(Waypoint(coordinate: CLLocationCoordinate2D(latitude: destination[1] as! CLLocationDegrees, longitude: destination[0] as! CLLocationDegrees)))
-    }
-
-    let options = NavigationRouteOptions(waypoints: intermediateWaypoints)
-    
     Directions.shared.calculate(options) { [weak self] (session, result) in
         guard let strongSelf = self, let parentVC = strongSelf.parentViewController else {
             return
@@ -141,16 +103,23 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     //          let navigationOptions = NavigationOptions(navigationService: navigationService, bottomBanner: bottomBannerView)
 
             let navigationOptions = NavigationOptions(navigationService: navigationService)
-            
+
             let vc = NavigationViewController(for: route, routeIndex: 0, routeOptions: options, navigationOptions: navigationOptions)
 
             vc.showsEndOfRouteFeedback = strongSelf.showsEndOfRouteFeedback
 
             vc.delegate = strongSelf
+                
+//                vc.navigationService ? i think we can hot-swap nav service, needs testing
 
+            strongSelf.navViewController?.view.removeFromSuperview()
             strongSelf.navViewController?.removeFromParent()
+            
+            print("---strongSelf.subviews---", strongSelf.subviews)
+
             parentVC.addChild(vc)
             strongSelf.addSubview(vc.view)
+
             vc.view.frame = strongSelf.bounds
             vc.didMove(toParent: parentVC)
             strongSelf.navViewController = vc
@@ -181,7 +150,7 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     onArrive?(["message": ""]);
     return true;
   }
-    
+        
 //    func navigationViewController(_ navigationViewController: NavigationViewController, waypointStyleLayerWithIdentifier identifier: String, source: MGLSource) -> MGLStyleLayer? {
     func navigationViewController(_ navigationViewController: NavigationViewController, waypointSymbolStyleLayerWithIdentifier identifier: String, source: MGLSource) -> MGLStyleLayer? {
         let styleLayer = MGLSymbolStyleLayer(identifier: identifier, source: source)
@@ -208,105 +177,62 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
         guard let style = navViewController?.mapView?.style else {
             return
         }
+        // step 1 -- check geojson length
 
-        // step 1 -- check waypoints length
-        if waypoints.count < 24 {
+        if geojson.length == 0 {
             return
         }
 
-        // step 2 -- if > 23, then at least one chunk to draw. Start cycling through from index 23 (it will be the last in previous chunk)
-        var routeChunks: [[Waypoint]] = [[]]
-        var chunkIndex = 0
-        var pointIndex = 1
-
-        for index in 23...waypoints.count - 1 {
-            let point = waypoints[index] as! NSArray
-            let newWaypoint = Waypoint(coordinate: CLLocationCoordinate2D(latitude: point[1] as! CLLocationDegrees, longitude: point[0] as! CLLocationDegrees))
-            routeChunks[chunkIndex].append(newWaypoint)
-
-            if pointIndex == 24 {
-                pointIndex = 0
-                chunkIndex += 1
-
-                // add end point of previous chunk as a start point of next chunk
-                routeChunks.append([newWaypoint])
-            } else {
-                pointIndex += 1
-            }
+        guard let geojsonData = geojson.data(using: String.Encoding.utf8.rawValue) else {
+            return
         }
 
-        let destinationWaypoint = Waypoint(coordinate: CLLocationCoordinate2D(latitude: destination[1] as! CLLocationDegrees, longitude: destination[0] as! CLLocationDegrees))
-        routeChunks[chunkIndex].append(destinationWaypoint)
+        guard let shapeFromGeoJSON = try? MGLShape(data: geojsonData, encoding: String.Encoding.utf8.rawValue) else {
+            fatalError("Could not generate MGLShape")
+        }
+        
+        let sourceIdentifier = "geojsonSource"
 
-        // step 3 -- request routes for each chunk, make shapes out of 'em; same routine as with icons -- check if source is present, update shape if it is, create new one if it isn't
-        for (sourceIndex, chunk) in routeChunks.enumerated() {
-            let options = NavigationRouteOptions(waypoints: chunk)
-            let stringIndex = String(sourceIndex)
+        if let source = style.source(withIdentifier: sourceIdentifier) as? MGLShapeSource {
+            source.shape = shapeFromGeoJSON
+        } else {
+            let source = MGLShapeSource(identifier: sourceIdentifier, shape: shapeFromGeoJSON, options: nil)
+            let polylineLayer = MGLLineStyleLayer(identifier: "geojsonLayer", source: source)
 
-            Directions.shared.calculate(options) { [weak self] (session, result) in
-                guard let strongSelf = self else {
-                    return
-                }
+            // Set the line join and cap to a rounded end.
+            polylineLayer.lineJoin = NSExpression(forConstantValue: "round")
+            polylineLayer.lineCap = NSExpression(forConstantValue: "round")
+             
+            // Set the line color to a constant blue color.
+            polylineLayer.lineColor = NSExpression(forConstantValue: UIColor(red: 88/255, green: 168/255, blue: 252/255, alpha: 0.3))
+             
+            // Use `NSExpression` to smoothly adjust the line width from 2pt to 20pt between zoom levels 14 and 18. The `interpolationBase` parameter allows the values to interpolate along an exponential curve.
+            polylineLayer.lineWidth = NSExpression(format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'linear', nil, %@)",
+                                                   [14: 8, 18: 20])
+//                        polylineLayer.lineWidth = NSExpression(forConstantValue: 20)
 
-                switch result {
-                    case .failure(let error):
-                        strongSelf.onError!(["message": error.localizedDescription])
-                    case .success(let response):
-                        guard let route = response.routes?.first else {
-                            return
-                        }
+            // We can also add a second layer that will draw a stroke around the original line.
+            let casingLayer = MGLLineStyleLayer(identifier: "geojsonCasingLayer", source: source)
+            // Copy these attributes from the main line layer.
+            casingLayer.lineJoin = polylineLayer.lineJoin
+            casingLayer.lineCap = polylineLayer.lineCap
+            // Line gap width represents the space before the outline begins, so should match the main line’s line width exactly.
+            casingLayer.lineGapWidth = polylineLayer.lineWidth
+            // Stroke color slightly darker than the line color.
+            casingLayer.lineColor = NSExpression(forConstantValue: UIColor(red: 44/255, green: 129/255, blue: 199/255, alpha: 0.5))
+            // Use `NSExpression` to gradually increase the stroke width between zoom levels 14 and 18.
+            casingLayer.lineWidth = NSExpression(format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'linear', nil, %@)", [14: 2, 18: 4])
+//                        casingLayer.lineWidth = NSExpression(forConstantValue: 4)
 
-                        guard let routeShape = route.shape else {
-                            return
-                        }
-
-                        let sourceIdentifier = "routeChunkSource" + stringIndex
-
-                        let polyline = MGLPolyline(routeShape)
-                        
-                        if let chunkSource = style.source(withIdentifier: sourceIdentifier) as? MGLShapeSource {
-                            chunkSource.shape = polyline
-                        } else {
-                            let chunkSource = MGLShapeSource(identifier: sourceIdentifier, shape: polyline, options: nil)
-                            let polylineLayer = MGLLineStyleLayer(identifier: "routeChunkLayer" + String(sourceIndex), source: chunkSource)
-
-                            // Set the line join and cap to a rounded end.
-                            polylineLayer.lineJoin = NSExpression(forConstantValue: "round")
-                            polylineLayer.lineCap = NSExpression(forConstantValue: "round")
-                             
-                            // Set the line color to a constant blue color.
-                            polylineLayer.lineColor = NSExpression(forConstantValue: UIColor(red: 88/255, green: 168/255, blue: 252/255, alpha: 1))
-                             
-                            // Use `NSExpression` to smoothly adjust the line width from 2pt to 20pt between zoom levels 14 and 18. The `interpolationBase` parameter allows the values to interpolate along an exponential curve.
-                            polylineLayer.lineWidth = NSExpression(format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'linear', nil, %@)",
-                                                                   [14: 8, 18: 20])
-    //                        polylineLayer.lineWidth = NSExpression(forConstantValue: 20)
-
-                            // We can also add a second layer that will draw a stroke around the original line.
-                            let casingLayer = MGLLineStyleLayer(identifier: "routeChunkCaseLayer" + String(sourceIndex), source: chunkSource)
-                            // Copy these attributes from the main line layer.
-                            casingLayer.lineJoin = polylineLayer.lineJoin
-                            casingLayer.lineCap = polylineLayer.lineCap
-                            // Line gap width represents the space before the outline begins, so should match the main line’s line width exactly.
-                            casingLayer.lineGapWidth = polylineLayer.lineWidth
-                            // Stroke color slightly darker than the line color.
-                            casingLayer.lineColor = NSExpression(forConstantValue: UIColor(red: 44/255, green: 129/255, blue: 199/255, alpha: 1))
-                            // Use `NSExpression` to gradually increase the stroke width between zoom levels 14 and 18.
-                            casingLayer.lineWidth = NSExpression(format: "mgl_interpolate:withCurveType:parameters:stops:($zoomLevel, 'linear', nil, %@)", [14: 2, 18: 4])
-    //                        casingLayer.lineWidth = NSExpression(forConstantValue: 4)
-
-                            style.addSource(chunkSource)
-    //                        style.addLayer(polylineLayer)
-                            
-                            if let activeFeaturesLayer = style.layer(withIdentifier: "activeContainersLayer") {
-                                style.insertLayer(polylineLayer, below: activeFeaturesLayer)
-                            } else {
-                                style.addLayer(polylineLayer)
-                            }
-                            style.insertLayer(casingLayer, below: polylineLayer)
-                        }
-                    }
+            style.addSource(source)
+//                        style.addLayer(polylineLayer)
+            
+            if let activeFeaturesLayer = style.layer(withIdentifier: "activeContainersLayer") {
+                style.insertLayer(polylineLayer, below: activeFeaturesLayer)
+            } else {
+                style.addLayer(polylineLayer)
             }
+            style.insertLayer(casingLayer, below: polylineLayer)
         }
     }
     
@@ -318,7 +244,7 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
             var completedFeatures: [MGLPointFeature] = []
             var wasteStationFeatures: [MGLPointFeature] = []
             var depotFeatures: [MGLPointFeature] = []
-            
+
             waypoints.compactMap { $0 as? NSArray }
                 .forEach { point in
                     let pointType = point[2] as! String
@@ -398,6 +324,8 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                 }
             }
 
+            let polylineLayer = style.layer(withIdentifier: "geojsonLayer")
+
             if !activeFeatures.isEmpty {
                 style.setImage(UIImage(named: "ContainerIcon")!, forName: "activeContainer")
 
@@ -414,9 +342,12 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                     symbols.iconImageName = NSExpression(forConstantValue: "activeContainer")
 
                     style.addSource(iconSource)
-//                    style.addLayer(symbols)
-                    
-                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
+
+                    if polylineLayer != nil {
+                        style.insertLayer(symbols, above: polylineLayer.unsafelyUnwrapped)
+                    } else {
+                        style.addLayer(symbols)
+                    }
                 }
             }
 
@@ -436,9 +367,12 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                     symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
 
                     style.addSource(iconSource)
-//                    style.addLayer(symbols)
-                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
 
+                    if polylineLayer != nil {
+                        style.insertLayer(symbols, above: polylineLayer.unsafelyUnwrapped)
+                    } else {
+                        style.addLayer(symbols)
+                    }
                 }
             }
             
@@ -458,9 +392,12 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                     symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
 
                     style.addSource(iconSource)
-//                    style.addLayer(symbols)
-                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
 
+                    if polylineLayer != nil {
+                        style.insertLayer(symbols, above: polylineLayer.unsafelyUnwrapped)
+                    } else {
+                        style.addLayer(symbols)
+                    }
                 }
             }
 
@@ -480,8 +417,12 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                     symbols.iconImageName = NSExpression(forConstantValue: "depot")
 
                     style.addSource(iconSource)
-                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
 
+                    if polylineLayer != nil {
+                        style.insertLayer(symbols, above: polylineLayer.unsafelyUnwrapped)
+                    } else {
+                        style.addLayer(symbols)
+                    }
                 }
             }
 
@@ -501,9 +442,12 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                     symbols.iconImageName = NSExpression(forConstantValue: "wasteStation")
 
                     style.addSource(iconSource)
-//                    style.addLayer(symbols)
-                    style.insertLayer(symbols, at: style.layers.count.magnitude - 1)
 
+                    if polylineLayer != nil {
+                        style.insertLayer(symbols, above: polylineLayer.unsafelyUnwrapped)
+                    } else {
+                        style.addLayer(symbols)
+                    }
                 }
             }
         }
@@ -562,12 +506,36 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     }
 
   @objc
-  func triggerReroute() {
+    func triggerReroute(newGeojson: NSString) {
+    print("--reroute triggered--")
+    self.geojson = newGeojson
+
     embed();
-    
-    drawRoutes()
-    drawIcons()
+
+    print("--rerouteFinished--")
+    onRerouteFinished?([:]);
+
+//    print("--geojson-- triggering reroute")
+//    drawRoutes()
+//    drawIcons()
   }
+
+    @objc func triggerOverview() {
+        print("--overview triggered-- camera pitch (before) =", navViewController?.mapView?.camera.pitch)
+
+        if let mapView = self.navViewController?.mapView {
+//            let newCamera = mapView.camera
+//
+//            newCamera.pitch = 0
+//
+//            mapView.camera = newCamera
+
+//            mapView.lockedPitch = 0
+            mapView.tracksUserCourse = true
+
+            print("--overview triggered-- camera pitch (after) =", mapView.camera.pitch)
+        }
+    }
 }
 
 class InvisibleBottomBarViewController: ContainerViewController {}
