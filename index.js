@@ -16,6 +16,7 @@ MapboxNavigation.propTypes = {
   onError: PropTypes.func,
   onCancelNavigation: PropTypes.func,
   onArrive: PropTypes.func,
+  onRerouteFinished: PropTypes.func,
   showsEndOfRouteFeedback: PropTypes.bool,
   innerRef: PropTypes.oneOfType([
     PropTypes.func, 

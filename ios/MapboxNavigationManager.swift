@@ -8,14 +8,25 @@ class MapboxNavigationManager: RCTViewManager {
     return true
   }
 
-  @objc func triggerRerouteFromManager(_ node: NSNumber) {
+  @objc func triggerRerouteFromManager(_ node: NSNumber, newGeojson: NSString) {
     DispatchQueue.main.async {
       let component = self.bridge.uiManager.view(
         forReactTag: node
       ) as! MapboxNavigationView
 
       print(component)
-      component.triggerReroute()
+      component.triggerReroute(newGeojson: newGeojson)
     }
   }
+    
+    @objc func triggerOverview(_ node: NSNumber) {
+        DispatchQueue.main.async {
+          let component = self.bridge.uiManager.view(
+            forReactTag: node
+          ) as! MapboxNavigationView
+
+          print(component)
+          component.triggerOverview()
+        }
+    }
 }
