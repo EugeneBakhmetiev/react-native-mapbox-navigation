@@ -45,6 +45,8 @@ class MapboxNavigationManager(var mCallerContext: ReactApplicationContext) : Sim
                 "onCancelNavigation", MapBuilder.of("registrationName", "onCancelNavigation"),
                 "onArrive", MapBuilder.of("registrationName", "onArrive"),
                 "onRouteProgressChange", MapBuilder.of("registrationName", "onRouteProgressChange"),
+                "onMarkerTap", MapBuilder.of("registrationName", "onMarkerTap"),
+                "onRerouteFinished", MapBuilder.of("registrationName", "onRerouteFinished"),
         )
     }
 
@@ -63,7 +65,15 @@ class MapboxNavigationManager(var mCallerContext: ReactApplicationContext) : Sim
             view.setDestination(null)
             return
         }
-        view.setDestination(Point.fromLngLat(sources.getDouble(0), sources.getDouble(1)))
+
+        view.setDestination(
+            PointWithProps(
+                Point.fromLngLat(sources.getDouble(0), sources.getDouble(1)),
+                sources.getString(2),
+                sources.getString(3),
+                sources.getString(4),
+            )
+        )
     }
 
     @ReactProp(name = "shouldSimulateRoute")
@@ -81,6 +91,11 @@ class MapboxNavigationManager(var mCallerContext: ReactApplicationContext) : Sim
         view.setLanguage(language)
     }
 
+    @ReactProp(name = "geojson")
+    fun setGeojson(view: MapboxNavigationView, geojson: String) {
+        view.setGeojson(geojson)
+    }
+
     @ReactProp(name = "waypoints")
     fun setWaypoints(view: MapboxNavigationView, sources: ReadableArray?) {
         if (sources == null) {
@@ -88,7 +103,7 @@ class MapboxNavigationManager(var mCallerContext: ReactApplicationContext) : Sim
             return
         }
 
-        val waypoints: MutableList<Point> = mutableListOf()
+        val waypoints: MutableList<PointWithProps> = mutableListOf()
 
         var index = 0
         val size = sources.size()
@@ -96,7 +111,14 @@ class MapboxNavigationManager(var mCallerContext: ReactApplicationContext) : Sim
         while (index < size) {
             val point = sources.getArray(index)
 
-            waypoints.add(Point.fromLngLat(point.getDouble(0), point.getDouble(1)))
+            waypoints.add(
+                PointWithProps(
+                    Point.fromLngLat(point.getDouble(0), point.getDouble(1)),
+                    point.getString(2),
+                    point.getString(3),
+                    point.getString(4),
+                )
+            )
             index++
         }
 
