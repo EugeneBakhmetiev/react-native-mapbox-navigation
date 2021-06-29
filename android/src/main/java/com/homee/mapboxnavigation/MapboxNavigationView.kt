@@ -1,14 +1,30 @@
 package com.homee.mapboxnavigation
 
+import android.R.style
+import android.graphics.Color
 import android.location.Location
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.events.RCTEventEmitter
+import com.google.gson.JsonObject
 import com.mapbox.api.directions.v5.models.DirectionsRoute
 import com.mapbox.api.directions.v5.models.RouteOptions
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
 import com.mapbox.mapboxsdk.Mapbox
 import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.geometry.LatLng
+import com.mapbox.mapboxsdk.location.LocationComponentConstants
+import com.mapbox.mapboxsdk.maps.MapView
+import com.mapbox.mapboxsdk.maps.MapboxMap
+import com.mapbox.mapboxsdk.style.layers.LineLayer
+import com.mapbox.mapboxsdk.style.layers.Property
+import com.mapbox.mapboxsdk.style.layers.PropertyFactory
+import com.mapbox.mapboxsdk.style.layers.PropertyFactory.*
+import com.mapbox.mapboxsdk.style.layers.SymbolLayer
+import com.mapbox.mapboxsdk.style.sources.GeoJsonSource
 import com.mapbox.navigation.base.internal.extensions.applyDefaultParams
 import com.mapbox.navigation.base.internal.route.RouteUrl
 import com.mapbox.navigation.base.trip.model.RouteProgress
@@ -22,17 +38,31 @@ import com.mapbox.navigation.ui.NavigationViewOptions
 import com.mapbox.navigation.ui.OnNavigationReadyCallback
 import com.mapbox.navigation.ui.listeners.NavigationListener
 import com.mapbox.navigation.ui.map.NavigationMapboxMap
+import kotlin.math.sqrt
 
 
-class MapboxNavigationView(private val context: ThemedReactContext) : NavigationView(context.baseContext), NavigationListener, OnNavigationReadyCallback {
+val locationLayers = setOf(
+    LocationComponentConstants.ACCURACY_LAYER,
+    LocationComponentConstants.BACKGROUND_LAYER,
+    LocationComponentConstants.BEARING_LAYER,
+    LocationComponentConstants.FOREGROUND_LAYER,
+    LocationComponentConstants.PULSING_CIRCLE_LAYER,
+    LocationComponentConstants.SHADOW_LAYER,
+)
+
+
+class MapboxNavigationView(private val context: ThemedReactContext) : NavigationView(context.baseContext), NavigationListener, OnNavigationReadyCallback, MapboxMap.OnMapClickListener {
     private var origin: Point? = null
-    private var destination: Point? = null
-    private var waypoints: List<Point?> = listOf()
+    private var destination: PointWithProps? = null
+    private var waypoints: List<PointWithProps?> = listOf()
     private var shouldSimulateRoute = false
     private var showsEndOfRouteFeedback = false
     private var language = "en"
+    private var geojson = ""
     private lateinit var navigationMapboxMap: NavigationMapboxMap
     private lateinit var mapboxNavigation: MapboxNavigation
+
+    private var mapboxMap: MapboxMap? = null
 
     init {
         onCreate(null)
@@ -96,15 +126,162 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
             this.mapboxNavigation.requestRoutes(RouteOptions.builder()
                     .applyDefaultParams()
                     .accessToken(accessToken)
-                    .coordinates(mutableListOf(origin) + this.waypoints + listOf(destination))
+                    .coordinates(mutableListOf(origin, destination!!.point))
                     .profile(RouteUrl.PROFILE_DRIVING)
                     .steps(true)
                     .language(this.language)
                     .voiceInstructions(true)
                     .build(), routesReqCallback)
+
+            this.mapboxMap = this.navigationMapboxMap.retrieveMap()
+
+//            val mapView = findViewById<MapView>(R.id.navigationMapView)
+//
+//            Log.d("MAPS", mapView.toString())
+
+            if (mapboxMap!!.style != null) {
+                val containerActiveIconId = this.context.resources.getIdentifier(
+                    "container_active_icon",
+                    "drawable",
+                    this.context.packageName,
+                )
+                val containerCompletedIconId = this.context.resources.getIdentifier(
+                    "container_completed_icon",
+                    "drawable",
+                    this.context.packageName,
+                )
+                val containerSkippedIconId = this.context.resources.getIdentifier(
+                    "container_skipped_icon",
+                    "drawable",
+                    this.context.packageName,
+                )
+                val wasteStationIconId = this.context.resources.getIdentifier(
+                    "waste_station_icon",
+                    "drawable",
+                    this.context.packageName,
+                )
+                val depotIconId = this.context.resources.getIdentifier(
+                    "depot_icon",
+                    "drawable",
+                    this.context.packageName,
+                )
+
+                val containerActiveIconDrawable = this.context.resources.getDrawable(
+                    containerActiveIconId,
+                    null,
+                )
+                val containerCompletedIconDrawable = this.context.resources.getDrawable(
+                    containerCompletedIconId,
+                    null,
+                )
+                val containerSkippedIconDrawable = this.context.resources.getDrawable(
+                    containerSkippedIconId,
+                    null,
+                )
+                val wasteStationIconDrawable = this.context.resources.getDrawable(
+                    wasteStationIconId,
+                    null,
+                )
+                val depotIconDrawable = this.context.resources.getDrawable(
+                    depotIconId,
+                    null,
+                )
+
+                mapboxMap!!.style!!.addImage("container_connected_to_route_icon", containerActiveIconDrawable)
+                mapboxMap!!.style!!.addImage("container_completed_icon", containerCompletedIconDrawable)
+                mapboxMap!!.style!!.addImage("container_skipped_icon", containerSkippedIconDrawable)
+                mapboxMap!!.style!!.addImage("waste_station_icon", wasteStationIconDrawable)
+                mapboxMap!!.style!!.addImage("depot_icon", depotIconDrawable)
+
+                val iconFeatureList: MutableList<Feature> = ArrayList()
+
+                for (waypoint in this.waypoints) {
+                    val properties = JsonObject()
+                    var iconName = "${waypoint!!.type}_icon"
+
+                    if (waypoint!!.type == "container") {
+                        iconName = "${waypoint!!.type}_${waypoint!!.status}_icon"
+                    }
+
+                    properties.addProperty("id", waypoint!!.id)
+                    properties.addProperty("iconName", iconName)
+
+                    iconFeatureList.add(Feature.fromGeometry(
+                        waypoint!!.point,
+                        properties,
+                    ))
+                }
+
+                val iconsSource = GeoJsonSource("icons_source", FeatureCollection.fromFeatures(iconFeatureList))
+                mapboxMap!!.style!!.addSource(iconsSource)
+
+                val iconsLayer = SymbolLayer("icons_layer", "icons_source")
+                    .withProperties(
+                        iconImage("{iconName}"),
+                        iconAllowOverlap(true),
+                        iconIgnorePlacement(true)
+                    )
+
+                var found = false
+                for (layer in mapboxMap!!.style!!.layers) {
+                    if (locationLayers.contains(layer.id)) {
+                        found = true
+                        mapboxMap!!.style!!.addLayerBelow(iconsLayer, layer.id)
+
+                        break
+                    }
+                }
+
+                if (!found) {
+                    mapboxMap!!.style!!.addLayer(iconsLayer)
+                }
+
+                val geoJsonFeatureCollection = FeatureCollection.fromJson(this.geojson)
+                val geojsonSource = GeoJsonSource("geojson_source", geoJsonFeatureCollection)
+                mapboxMap!!.style!!.addSource(geojsonSource)
+
+                val geojsonLayer = LineLayer("geojson_layer", "geojson_source")
+                    .withProperties(PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                        PropertyFactory.lineOpacity(.3f),
+                        PropertyFactory.lineWidth(6f),
+                        PropertyFactory.lineColor(Color.parseColor("#58a8fc")))
+
+                val geojsonCasingLayer = LineLayer("geojson_casing_layer", "geojson_source")
+                    .withProperties(PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                        PropertyFactory.lineOpacity(.5f),
+                        PropertyFactory.lineGapWidth(6f),
+                        PropertyFactory.lineColor(Color.parseColor("#2c81c7")))
+                mapboxMap!!.style!!.addLayerBelow(geojsonLayer, "icons_layer")
+                mapboxMap!!.style!!.addLayerBelow(geojsonCasingLayer, "icons_layer")
+
+                mapboxMap!!.addOnMapClickListener(this)
+            }
         } catch (ex: Exception) {
             sendErrorToReact(ex.toString())
         }
+    }
+
+    override fun onMapClick(point: LatLng): Boolean {
+        val nearestMarker = this.waypoints.sortedBy {
+            distance(point, it!!.point)
+        }.take(1)[0]
+
+        if (nearestMarker != null) {
+            val event = Arguments.createMap()
+            event.putString("id", nearestMarker.id)
+            context.getJSModule(RCTEventEmitter::class.java).receiveEvent(id, "onMarkerTap", event)
+        }
+
+        return true
+    }
+
+    private fun distance(tapLocation: LatLng, waypoint: Point): Double {
+        val distanceX = tapLocation.latitude - waypoint.latitude()
+        val distanceY = tapLocation.longitude - waypoint.longitude()
+
+        return sqrt(distanceX * distanceX + distanceY * distanceY)
     }
 
     private val routesReqCallback = object : RoutesRequestCallback {
@@ -209,7 +386,7 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
         this.origin = origin
     }
 
-    fun setDestination(destination: Point?) {
+    fun setDestination(destination: PointWithProps?) {
         this.destination = destination
     }
 
@@ -225,7 +402,11 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
         this.language = language
     }
 
-    fun setWaypoints(waypoints: List<Point?>) {
+    fun setGeojson(geojson: String) {
+        this.geojson = geojson
+    }
+
+    fun setWaypoints(waypoints: List<PointWithProps?>) {
         this.waypoints = waypoints
     }
 
@@ -246,18 +427,105 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
             this.mapboxNavigation.requestRoutes(RouteOptions.builder()
                     .applyDefaultParams()
                     .accessToken(accessToken)
-                    .coordinates(mutableListOf(origin) + this.waypoints + listOf(destination))
+                    .coordinates(mutableListOf(origin, destination!!.point))
                     .profile(RouteUrl.PROFILE_DRIVING)
                     .steps(true)
                     .language(this.language)
                     .voiceInstructions(true)
                     .build(), routesReqCallback)
+
+            val iconFeatureList: MutableList<Feature> = ArrayList()
+
+            for (waypoint in this.waypoints) {
+                val properties = JsonObject()
+                var iconName = "${waypoint!!.type}_icon"
+
+                if (waypoint!!.type == "container") {
+                    iconName = "${waypoint!!.type}_${waypoint!!.status}_icon"
+                }
+
+                properties.addProperty("id", waypoint!!.id)
+                properties.addProperty("iconName", iconName)
+
+                iconFeatureList.add(Feature.fromGeometry(
+                        waypoint!!.point,
+                        properties,
+                ))
+            }
+
+            // cleanup
+            mapboxMap!!.style!!.removeLayer("icons_layer")
+            mapboxMap!!.style!!.removeSource("icons_source")
+
+            val iconsSource = GeoJsonSource("icons_source", FeatureCollection.fromFeatures(iconFeatureList))
+            val iconsLayer = SymbolLayer("icons_layer", "icons_source")
+                .withProperties(
+                    iconImage("{iconName}"),
+                    iconAllowOverlap(true),
+                    iconIgnorePlacement(true)
+                )
+
+            mapboxMap!!.style!!.addSource(iconsSource)
+            var found = false
+            for (layer in mapboxMap!!.style!!.layers) {
+                if (locationLayers.contains(layer.id)) {
+                    found = true
+                    mapboxMap!!.style!!.addLayerBelow(iconsLayer, layer.id)
+
+                    break
+                }
+            }
+
+            if (!found) {
+                mapboxMap!!.style!!.addLayer(iconsLayer)
+            }
+
+            mapboxMap!!.style!!.removeLayer("geojson_layer")
+            mapboxMap!!.style!!.removeLayer("geojson_casing_layer")
+            mapboxMap!!.style!!.removeSource("geojson_source")
+
+            val geoJsonFeatureCollection = FeatureCollection.fromJson(this.geojson)
+            val geojsonSource = GeoJsonSource("geojson_source", geoJsonFeatureCollection)
+            val geojsonLayer = LineLayer("geojson_layer", "geojson_source")
+                .withProperties(PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    PropertyFactory.lineOpacity(.3f),
+                    PropertyFactory.lineWidth(6f),
+                    PropertyFactory.lineColor(Color.parseColor("#58a8fc")))
+
+            val geojsonCasingLayer = LineLayer("geojson_casing_layer", "geojson_source")
+                .withProperties(PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                    PropertyFactory.lineOpacity(.5f),
+                    PropertyFactory.lineGapWidth(6f),
+                    PropertyFactory.lineColor(Color.parseColor("#2c81c7")))
+
+            mapboxMap!!.style!!.addSource(geojsonSource)
+            mapboxMap!!.style!!.addLayerBelow(geojsonLayer, "icons_layer")
+            mapboxMap!!.style!!.addLayerBelow(geojsonCasingLayer, "icons_layer")
         } catch (ex: Exception) {
             sendErrorToReact(ex.toString())
+        } finally {
+            val event = Arguments.createMap()
+            context.getJSModule(RCTEventEmitter::class.java).receiveEvent(id, "onRerouteFinished", event)
         }
     }
 
     fun onDropViewInstance() {
         this.onDestroy()
+    }
+}
+
+class PointWithProps {
+    var point: Point
+    var id: String
+    var type: String
+    var status: String
+
+    constructor(point: Point, type: String, status: String, id: String) {
+        this.point = point
+        this.id = id
+        this.type = type
+        this.status = status
     }
 }
