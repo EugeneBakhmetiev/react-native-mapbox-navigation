@@ -261,7 +261,7 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                         "id": pickupOrderId
                     ]
 
-                    if pointType == "container" {
+                    if (pointType == "container" || pointType == "inquiry") {
                         switch pointStatus {
                             // maybe keep all geoJsons in a single dict, and use status/type combo as a key?
                             case "completed":
@@ -300,7 +300,7 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                 "id": pickupOrderId
             ]
             
-            if pointType == "container" {
+            if (pointType == "container" || pointType == "inquiry") {
                 switch pointStatus {
                     // maybe keep all geoJsons in a single dict, and use status/type combo as a key?
                     case "completed":

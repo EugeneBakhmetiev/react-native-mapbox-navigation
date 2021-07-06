@@ -199,8 +199,8 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
                     val properties = JsonObject()
                     var iconName = "${waypoint!!.type}_icon"
 
-                    if (waypoint!!.type == "container") {
-                        iconName = "${waypoint!!.type}_${waypoint!!.status}_icon"
+                    if (waypoint!!.type == "container" || waypoint!!.type == "inquiry") {
+                        iconName = "container_${waypoint!!.status}_icon"
                     }
 
                     properties.addProperty("id", waypoint!!.id)
@@ -440,8 +440,8 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
                 val properties = JsonObject()
                 var iconName = "${waypoint!!.type}_icon"
 
-                if (waypoint!!.type == "container") {
-                    iconName = "${waypoint!!.type}_${waypoint!!.status}_icon"
+                if (waypoint!!.type == "container" || waypoint!!.type == "inquiry") {
+                    iconName = "container_${waypoint!!.status}_icon"
                 }
 
                 properties.addProperty("id", waypoint!!.id)
