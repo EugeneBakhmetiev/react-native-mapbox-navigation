@@ -140,11 +140,6 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
 //            Log.d("MAPS", mapView.toString())
 
             if (mapboxMap!!.style != null) {
-                val containerActiveIconId = this.context.resources.getIdentifier(
-                    "container_active_icon",
-                    "drawable",
-                    this.context.packageName,
-                )
                 val containerCompletedIconId = this.context.resources.getIdentifier(
                     "container_completed_icon",
                     "drawable",
@@ -166,10 +161,6 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
                     this.context.packageName,
                 )
 
-                val containerActiveIconDrawable = this.context.resources.getDrawable(
-                    containerActiveIconId,
-                    null,
-                )
                 val containerCompletedIconDrawable = this.context.resources.getDrawable(
                     containerCompletedIconId,
                     null,
@@ -187,9 +178,9 @@ class MapboxNavigationView(private val context: ThemedReactContext) : Navigation
                     null,
                 )
 
-                mapboxMap!!.style!!.addImage("container_connected_to_route_icon", containerActiveIconDrawable)
+                mapboxMap!!.style!!.addImage("container_connected_to_route_icon", containerSkippedIconDrawable)
                 mapboxMap!!.style!!.addImage("container_completed_icon", containerCompletedIconDrawable)
-                mapboxMap!!.style!!.addImage("container_skipped_icon", containerSkippedIconDrawable)
+                mapboxMap!!.style!!.addImage("container_skipped_icon", containerCompletedIconDrawable)
                 mapboxMap!!.style!!.addImage("waste_station_icon", wasteStationIconDrawable)
                 mapboxMap!!.style!!.addImage("depot_icon", depotIconDrawable)
 

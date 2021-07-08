@@ -271,10 +271,12 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                                 activeFeatures.append(newFeature)
 
                             case "skipped":
-                                skippedFeatures.append(newFeature)
+                                completedFeatures.append(newFeature)
+//                                skippedFeatures.append(newFeature)
 
                             default:
-                                skippedFeatures.append(newFeature)
+                                completedFeatures.append(newFeature)
+//                                skippedFeatures.append(newFeature)
 
                         }
                     } else {
@@ -310,10 +312,12 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                         activeFeatures.append(newFeature)
 
                     case "skipped":
-                        skippedFeatures.append(newFeature)
+                        completedFeatures.append(newFeature)
+//                        skippedFeatures.append(newFeature)
 
                     default:
-                        skippedFeatures.append(newFeature)
+                        completedFeatures.append(newFeature)
+//                        skippedFeatures.append(newFeature)
 
                 }
             } else {
@@ -327,7 +331,7 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
             let polylineLayer = style.layer(withIdentifier: "geojsonLayer")
 
             if !activeFeatures.isEmpty {
-                style.setImage(UIImage(named: "ContainerIcon")!, forName: "activeContainer")
+                style.setImage(UIImage(named: "SkippedContainerIcon")!, forName: "activeContainer")
 
                 if let iconSource = style.source(withIdentifier: "activeContainersSource") as? MGLShapeSource {
                     let collection = MGLShapeCollectionFeature(shapes: activeFeatures)
@@ -351,30 +355,30 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
                 }
             }
 
-            if !skippedFeatures.isEmpty {
-                style.setImage(UIImage(named: "SkippedContainerIcon")!, forName: "skippedContainer")
-                
-                if let iconSource = style.source(withIdentifier: "skippedContainersSource") as? MGLShapeSource {
-                    let collection = MGLShapeCollectionFeature(shapes: skippedFeatures)
-
-                    iconSource.shape = collection
-                } else {
-                    let iconSource = MGLShapeSource(identifier: "skippedContainersSource", features: skippedFeatures, options: nil)
-
-                    let symbols = MGLSymbolStyleLayer(identifier: "skippedContainersLayer", source: iconSource)
-
-                    symbols.iconImageName = NSExpression(forConstantValue: "skippedContainer")
-                    symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
-
-                    style.addSource(iconSource)
-
-                    if polylineLayer != nil {
-                        style.insertLayer(symbols, above: polylineLayer.unsafelyUnwrapped)
-                    } else {
-                        style.addLayer(symbols)
-                    }
-                }
-            }
+//            if !skippedFeatures.isEmpty {
+//                style.setImage(UIImage(named: "SkippedContainerIcon")!, forName: "skippedContainer")
+//
+//                if let iconSource = style.source(withIdentifier: "skippedContainersSource") as? MGLShapeSource {
+//                    let collection = MGLShapeCollectionFeature(shapes: skippedFeatures)
+//
+//                    iconSource.shape = collection
+//                } else {
+//                    let iconSource = MGLShapeSource(identifier: "skippedContainersSource", features: skippedFeatures, options: nil)
+//
+//                    let symbols = MGLSymbolStyleLayer(identifier: "skippedContainersLayer", source: iconSource)
+//
+//                    symbols.iconImageName = NSExpression(forConstantValue: "skippedContainer")
+//                    symbols.iconAllowsOverlap = NSExpression(forConstantValue: true)
+//
+//                    style.addSource(iconSource)
+//
+//                    if polylineLayer != nil {
+//                        style.insertLayer(symbols, above: polylineLayer.unsafelyUnwrapped)
+//                    } else {
+//                        style.addLayer(symbols)
+//                    }
+//                }
+//            }
             
             if !completedFeatures.isEmpty {
                 style.setImage(UIImage(named: "CompletedContainerIcon")!, forName: "completedContainer")
@@ -457,7 +461,8 @@ class MapboxNavigationView: UIView, NavigationViewControllerDelegate {
     @objc @IBAction func handleMapTap(sender: UITapGestureRecognizer) {
         if sender.state == .ended {
             // Limit feature selection to just the following layer identifiers.
-            let layerIdentifiers: Set = ["completedContainersLayer", "skippedContainersLayer", "activeContainersLayer", "wasteStationsLayer", "depotsLayer"]
+//            let layerIdentifiers: Set = ["completedContainersLayer", "skippedContainersLayer", "activeContainersLayer", "wasteStationsLayer", "depotsLayer"]
+            let layerIdentifiers: Set = ["completedContainersLayer", "activeContainersLayer", "wasteStationsLayer", "depotsLayer"]
          
             // Try matching the exact point first.
             let point = sender.location(in: sender.view!)
