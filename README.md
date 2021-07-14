@@ -291,7 +291,8 @@ Array that contains the longitude and latitude for the starting point.<br>
 #### `destination` (**Required**)
 
 Array that contains the longitude and latitude for the destination point.<br>
-`[$longitude, $latitude]`
+Also contains point type, status and orderId (for marker)<br>
+`[$longitude, $latitude, $type, $status, $id]`
 
 #### `shouldSimulateRoute`
 
@@ -300,6 +301,23 @@ Boolean that controls route simulation. Set this as `true` to auto navigate whic
 #### `showsEndOfRouteFeedback`
 
 Boolean that controls showing the end of route feedback UI when the route controller arrives at the final destination. Defaults to `false`.
+
+#### `waypoints`
+
+Array of waypoints to display as markers. Each point is an array that contains longitude, latitude, title, type, status and orderId.
+`[$longitude, $latitude, $title, $type, $status, $id]`
+
+#### `geojson`
+
+Stringified geojson that contains directions for every route stop after the current destination.
+
+#### `innerRef`
+
+React ref that gives access to map node (required for calling commands like `triggerRerouteFromManager`).
+
+#### `language` (Android only)
+
+Forces navigation to use set language instead of inferring it from current system language.
 
 #### `onLocationChange`
 
@@ -320,6 +338,76 @@ Function that is called whenever a user cancels navigation.
 #### `onArrive`
 
 Function that is called when you arrive at the provided destination.
+
+#### `onMarkerTap`
+
+Function that is called when user taps a marker. Receives `{id: orderId}` object as param.
+
+#### `onRerouteFinished`
+
+Function that is called when navigation component is done rerouting (i.e. after waypoint status change).<br>
+Is not called on the first ever routing.
+
+### Adding native commands
+
+To add a native command, you should do the following:
+#### iOS
+1. Add new external param in `MapboxNavigationManager.m`. Format should be<br>
+`RCT_EXTERN_METHOD(<command_name>:(nonnull NSNumber *)node [<param_name>:(<param_type>)<param_name>])`<br>
+There can be multiple params.
+2. Add new method in `MapboxNavigationManager.swift`:<br>
+```
+@objc func <command_name>(_ node: NSNumber [, <param_name>: <param_type>]) {
+  DispatchQueue.main.async {
+    let component = self.bridge.uiManager.view(
+      forReactTag: node
+    ) as! MapboxNavigationView
+
+    component.<component_method_name>([<param_name>: <param>])
+  }
+}
+```
+`@objc` decorator is required so that Objective-C recognizes this as an externally accessible method.
+`_ node: NSNumber` param is required, so that we can find required node and trigger the method there.
+3. Add new method in `MapboxNavigationView.swift`:
+```
+@objc func <component_method_name>([<param_name>: <param>]) {
+  ...
+}
+```
+Again, `@objc` decorator is required so that Objective-C recognizes this as an externally accessible method.
+
+#### Android
+1. Add new branch in `receiveCommand` method in `MapboxNavigationManager.kt`:
+```
+"<command_name>" -> {
+  view.<component_method_name>([args]);
+}
+```
+2. Add new method in `MapboxNavigationView.kt`:
+```
+fun <component_method_name>([<param_name: param_type>]) {
+  ...
+}
+```
+
+### Triggering native commands from React Native
+
+To trigger a command, you need to:
+1. Get a ref to the map node via `innerRef` prop
+2. Use next code 
+```
+import {UIManager, Platform, findNodeHandle} from 'react-native';
+
+UIManager.dispatchViewManagerCommand(
+  findNodeHandle(mapRef.current),
+  Platform.OS === 'android'
+    ? '<command_name>'
+    : UIManager["MapboxNavigation"].Commands.<command_name>,
+  [<params>],
+);
+```
+If command accepts no args, `params` array should be empty
 
 ## Contributing
 
